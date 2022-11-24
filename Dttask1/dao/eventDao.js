@@ -1,11 +1,18 @@
+const { MongoAPIError } = require('mongodb')
 
 
 class dao{
 
-    insertOneEvent(eventDto){
+    async deleteAll(){
         let dba = require('../db/eventClient')
         let tempConn = new dba()
-        tempConn.collection.insertOne(eventDto)
+        await tempConn.collection.deleteMany()
+        tempConn.client.close()
+    }
+    async insertOneEvent(eventDto){
+        let dba = require('../db/eventClient')
+        let tempConn = new dba()
+        await tempConn.collection.insertOne(eventDto)
         tempConn.client.close()
     }
     async deleteEventbyId(eventId){
@@ -21,9 +28,9 @@ class dao{
 
         if(result != null){
             deletedCount = 1
-            tempConn.collection.deleteOne({"_id":eventId}).then((doc)=>{
-                tempConn.client.close()
-            })
+            await tempConn.collection.deleteOne({"_id":eventId})
+            tempConn.client.close()
+        
             if(result.file != undefined){
                 unlink(join(__dirname , ".." , "api" , "v3" , "app" , "events" , "images" , result.file) , ()=>{})
             }
@@ -51,19 +58,36 @@ class dao{
         tempConn.client.close()
         return result
     }
-    async getEventByPage(type , page , limit){
+    async getEventByPage(type , page = null , limit = null){
         let dba = require('../db/eventClient')
         let tempConn = new dba()
         let event = []
-        let result = await tempConn.collection.find({"type" : type})
-        .sort({"schedule":1})
-        .skip(page*limit)
-        .limit(limit)
-        .forEach(doc => event.push(doc))
+        if(page == null || limit == null){
+            let result = await tempConn.collection.find({"type" : type})
+            .sort({"schedule":1})
+            .forEach(doc => event.push(doc))
+        }else{
+            let result = await tempConn.collection.find({"type" : type})
+            .sort({"schedule":1})
+            .skip(page*limit)
+            .limit(limit)
+            .forEach(doc => event.push(doc))
+        }
+        
         return event
       
         
     }
+    async getAllEventByUserId(uid){
+        let dba = require('../db/eventClient')
+        let tempConn = new dba()
+        let result = tempConn.collection.find({"uid" : uid})
+        let returnRes = []
+        await result.forEach((ele)=>returnRes.push(ele));
+        tempConn.client.close()
+        return returnRes
+    }
+    
 }
 
 

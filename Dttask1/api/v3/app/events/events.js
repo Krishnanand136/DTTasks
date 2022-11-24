@@ -3,14 +3,19 @@ const { ObjectId, Int32  } = require('mongodb')
 const multer = require('multer')
 const eventDto = require('../../../../dto/eventDto')
 const eventDao = require('../../../../dao/eventDao')
+const db = require("../../../../db/eventClient")
 const router = express.Router()
+const {readFileSync} = require('fs')
+const {join} = require('path')
+/*eDao = new eventDao()
+eDao.deleteAll()*/
 
 
 
 //file upload multer
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-      cb(null, './api/v3/app/events/images')
+      cb(null, join(__dirname , 'images'))
     },
     filename: function (req, file, cb) {
       fileName = Date.now() + '_' + Math.round(Math.random() * 1E9) + "." + file.originalname.split(".")[1]
@@ -23,8 +28,109 @@ const upload = multer({ storage: storage })
 
 
 router.use(express.json());
+// router.use(express.urlencoded()); 
 
 
+
+
+router.get("/userCreated/:uid",async(req,res)=>{
+  
+  responseObject  = {
+    error_code : 0,
+    message : "",
+    success : "",
+    data : "",
+  }
+  
+
+    try{
+        userId = new ObjectId(req.params.uid)
+        eDao = new eventDao()
+        result = await eDao.getAllEventByUserId(userId)
+        if(result == null){
+            responseObject.success = false,
+            responseObject.message = "No such records found"
+            responseObject.data = {}
+        }
+        else{
+          responseObject.success = true,
+          responseObject.message = "record found" 
+          responseObject.data = result
+        }
+
+        res.status(200).send(responseObject)
+
+    }catch(e){
+      if(e.name == "BSONTypeError"){ 
+        responseObject.error_code = 1 , 
+        responseObject.success = false,
+        responseObject.message = "Id parameter is not of BSONType"
+        responseObject.data = {}
+        res.status(200).send(responseObject)
+
+      }else{ 
+        responseObject.error_code = 500, 
+        responseObject.success = false,
+        responseObject.message = "some error occured"
+        responseObject.data = e
+        res.status(500).send(responseObject)
+      }
+    }
+    
+})
+
+router.get("/userCreated/image/:eid" , async(req , res)=>{
+      
+  responseObject  = {
+    error_code : 0,
+    message : "",
+    success : "",
+    data : "",
+  }
+  
+
+    try{
+        eventId = new ObjectId(req.params.eid)
+        eDao = new eventDao()
+        result = await eDao.getEventById(eventId)
+        if(result == null){
+            responseObject.success = false,
+            responseObject.message = "No such records found"
+            responseObject.data = {}
+            res.status(200).send(responseObject)
+        }
+        else{ 
+          if(result.file != undefined){
+            res.status(200).sendFile(join(__dirname, "images" , result.file))
+          }
+          else{
+            responseObject.success = true,
+            responseObject.message = "No image"
+            responseObject.data = {}
+            res.status(200).send(responseObject)
+          }
+
+         
+        }
+
+
+    }catch(e){
+      if(e.name == "BSONTypeError"){ 
+        responseObject.error_code = 1 , 
+        responseObject.success = false,
+        responseObject.message = "Id parameter is not of BSONType"
+        responseObject.data = {}
+        res.status(200).send(responseObject)
+
+      }else{ 
+        responseObject.error_code = 500, 
+        responseObject.success = false,
+        responseObject.message = "some error occured"
+        responseObject.data = e
+        res.status(500).send(responseObject)
+      }
+    }
+})
 
 router.get("", async (req,res)=>{
 
@@ -75,9 +181,8 @@ router.get("", async (req,res)=>{
     }else{
 
       type = req.query.type || "event"
-
       page = parseInt(req.query.page) || 0
-      limit = parseInt(req.query.limit) || 5
+      limit = parseInt(req.query.limit) || null
 
 
       eDao = new eventDao()
@@ -91,7 +196,7 @@ router.get("", async (req,res)=>{
 
 })
 
-router.post("/" ,  upload.single('eventImage'),(req , res)=>{
+router.post("/" ,  upload.single('eventImage'),async (req , res)=>{
         responseObject  = {
           error_code : 0,
           message : "",
@@ -99,19 +204,25 @@ router.post("/" ,  upload.single('eventImage'),(req , res)=>{
           data : "",
         }
 
-
-        dates = (req.body.schedule).split("-")
-        schedule = new Date(dates[0] , dates[1] , dates[2])
         eventId = new ObjectId()
-        eDto = new eventDto(eventId , "event" , 18 , req.body.name , req.file , req.body.tagline, schedule , req.body.description, req.body.moderator , req.body.category , req.body.sub_category , req.body.rigor_rank , req.body.attendees)
+        eDto = new eventDto(eventId , "event" , ObjectId(req.body.uid) , req.body.name , req.file , req.body.tagline, new Date(req.body.schedule) , req.body.description, req.body.moderator , req.body.category )
         eDao = new eventDao()
-        eDao.insertOneEvent(eDto)
-        
-        responseObject.success = true,
-        responseObject.message = "Inserted one record"
-        responseObject.data = {eventId}
-        
-        res.send(responseObject)
+        try{
+          await eDao.insertOneEvent(eDto)
+          responseObject.success = true,
+          responseObject.error_code = 0 , 
+          responseObject.message = "Inserted one record"
+          responseObject.data = {eventId}
+          res.status(200).send(responseObject)
+        }catch(e){
+          responseObject.success = false,
+          responseObject.message = "some error occured"
+          responseObject.data = e
+          responseObject.error_code = 500 ,
+          res.status(500).send(responseObject)
+
+        }
+
         
 })
 
@@ -126,7 +237,7 @@ router.put("/:id" ,  upload.single('eventImage'), async (req , res)=>{
 
   try{
       eventId = ObjectId(req.params.id)
-      eDto = new eventDto( eventId , "event" , 18 , req.body.name , req.file , req.body.tagline, req.body.schedule , req.body.description, req.body.moderator , req.body.category , req.body.sub_category , req.body.rigor_rank , req.body.attendees)
+      eDto = new eventDto( eventId , "event" , ObjectId(req.body.uid) , req.body.name , req.file , req.body.tagline, req.body.schedule , req.body.description, req.body.moderator , req.body.category , req.body.sub_category , req.body.rigor_rank , req.body.attendees)
       eDao = new eventDao()
       result = await eDao.updateEventById(eventId , eDto)
 
@@ -187,7 +298,6 @@ router.delete("/:id" , async (req , res)=>{
       res.status(200).send(responseObject)
 
     }catch(e){
-      
       if(e.name == "BSONTypeError"){ 
         responseObject.error_code = 1 , 
         responseObject.success = false,
@@ -198,7 +308,6 @@ router.delete("/:id" , async (req , res)=>{
         responseObject.success = false,
         responseObject.message = "some error occured"
         responseObject.data = e
-        throw e;
       }
       res.status(500).send(responseObject)
     } 

@@ -5,9 +5,9 @@ class db{
     constructor(){
        
             this.mongoClient = require("mongodb").MongoClient
-            this.link ="mongodb+srv://krishna:<password>@krishnascluster.ku7lbyi.mongodb.net/test"
+            this.link ="mongodb://localhost:27017"
             this.client = new this.mongoClient(this.link)
-            this.db =  this.client.db("DTDB")
+            this.db =  this.client.db("WK")
             this.collection = this.db.collection("events")
 
     }
